@@ -5,7 +5,7 @@
 // @match      http://mush.vg/*
 // @copyright  2012+, You
 // @namespace https://github.com/Allen57/ReportGenerator
-// @updateurl TODO
+// @updateurl https://github.com/Allen57/ReportGenerator/raw/master/reportgenerator.user.js
 // ==/UserScript==
 // @require http://code.jquery.com/jquery-latest.js
 var $ = unsafeWindow.jQuery;
@@ -13,7 +13,7 @@ var Main = unsafeWindow.Main;
 var now, cycle, jour, projets, nbProjets, recherches, nbRecherches, oxy, fuel, armure, bouclier, calculInfo = false,
     nbVivants, vivants, morts, tabActive;
 
-heros = new Array('Jin Su', 'Frieda', 'Kuan Ti', 'Janice', 'Roland', 'Hua', 'Paola', 'Chao', 'Finola', 'Stephen', 'Ian', 'Chun', 'Raluca', 'Gioele', 'Eleesha', 'Terrence');
+heros = ['Jin Su', 'Frieda', 'Kuan Ti', 'Janice', 'Roland', 'Hua', 'Paola', 'Chao', 'Finola', 'Stephen', 'Ian', 'Chun', 'Raluca', 'Gioele', 'Eleesha', 'Terrence'];
 
 
 function TabTip(e) {
@@ -30,19 +30,20 @@ function TabTip(e) {
 
 function SelectTab(el) {
     tabActive = false;
+    var $rgtab = $("#rg_tab");
+    var $rgtabcontent = $("#rg_tab_content");
     if (el.getAttribute('data-tab') != '13') {
-        $("#tab").removeClass("tabon").addClass("taboff");
-        $("#tab_content").css("display", "none");
+        $rgtab.removeClass("tabon").addClass("taboff");
+        $rgtabcontent.css("display", "none");
         if (el.getAttribute('data-tab') != undefined) {
-            return Main.selChat(el.getAttribute('data-tab'));
-        } else {
-            return;
+            Main.selChat(el.getAttribute('data-tab'));
         }
+        return;
     }
 
     // Select tab
     $("#cdTabsChat").find("li").removeClass("tabon").addClass("taboff");
-    $("#tab").removeClass("taboff").addClass("tabon");
+    $rgtab.removeClass("taboff").addClass("tabon");
 
     // Display content
     $("#localChannel").css("display", "none");
@@ -55,26 +56,28 @@ function SelectTab(el) {
     $("#privateform").css("display", "none");
     $("#wall").css("display", "none");
     $("#astrotab_content").css("display", "none");
-    $("#tab_content").css("display", "block");
+    $rgtabcontent.css("display", "block");
     tabActive = true;
     fillRapport();
 }
 
 function buildTab() {
-    if ($("#tab").length > 0) return;
+    var $rgtab = $("#rg_tab");
+    if ($rgtab.length > 0) return;
     var rbg = $("#chatBlock");
-    $("<div>").addClass("cdTab").attr("id", "tab_content").appendTo(rbg);
-    $("#tab").attr("_title", "ReportGenerator").attr("_desc", "Permet de générer un rapport.");
+    $("<div>").addClass("cdTab").attr("id", "rg_tab_content").appendTo(rbg);
+    $rgtab.attr("_title", "ReportGenerator").attr("_desc", "Permet de générer un rapport.");
 
-    var tabschat = $("#cdTabsChat");
-    var tabs = $("<li>").addClass("tab taboff").attr("id", "tab").attr("data-tab", "13").appendTo(tabschat);
+    var $tabschat = $("#cdTabsChat");
+    var tabs = $("<li>").addClass("tab taboff").attr("id", "rg_tab").attr("data-tab", "13").appendTo($tabschat);
     $("<img>").attr("src", "/img/icons/ui/book.png").appendTo(tabs);
     fill_tab();
-    $("#tab_content").css("display", "none");
-    $("#tab_content").parent().css('height', '500px');
-    $("#tab").on("mouseover", TabTip);
-    $("#tab").on("mouseout", Main.hideTip);
-    $("#cdTabsChat li").on("click", function () {
+    var $rgtabcontent = $("#rg_tab_content");
+    $rgtabcontent.css("display", "none");
+    $rgtabcontent.parent().css('height', '500px');
+    $rgtab.on("mouseover", TabTip);
+    $rgtab.on("mouseout", Main.hideTip);
+    $tabschat.find("li").on("click", function () {
         SelectTab(this);
     });
 }
@@ -107,7 +110,8 @@ function calculerInfos() {
 
     projets = "";
     nbProjets = 0;
-    $("#cdBottomBlock ul li:has(div.project) img").each(function () {
+    var $cdBottomBlock = $("#cdBottomBlock");
+    $cdBottomBlock.find("ul li:has(div.project) img").each(function () {
         var pattern = /<h1>(.*?)<\/h1>/g;
         var res = pattern.exec($(this).attr("onMouseOver"));
         if (projets.length != 0) {
@@ -119,7 +123,7 @@ function calculerInfos() {
 
     recherches = "";
     nbRecherches = 0;
-    $("#cdBottomBlock ul li:has(div.research) img").each(function () {
+    $cdBottomBlock.find("ul li:has(div.research) img").each(function () {
         var pattern = /<h1>(.*?)<\/h1>/g;
         var res = pattern.exec($(this).attr("onMouseOver"));
         if (recherches.length != 0) {
@@ -181,7 +185,7 @@ function getForm(label, nom) {
     return "<label for='" + nom + "'>" + label + " : </label> <input type='text' name='" + nom + "' id='" + nom + "' value='" + localStorage[nom] + "' style='color: black'/><br>";
 }
 function fill_tab() {
-    var tab = $("#tab_content").empty();
+    var tab = $("#rg_tab_content").empty();
     var titre = "<h2>Rapport</h2><br>";
     var rapport = "<textarea style='color: black; height: 100px; width: 350px;' id='rg_rapport'></textarea><br>";
     var forms = "<form action='#'>";
@@ -242,7 +246,7 @@ function checkChange() {
     }
 }
 function setDefault(nom, val) {
-    if (!localStorage[nom] || localStorage[nom] == "") {
+    if (!localStorage[nom] || localStorage[nom] == "" || localStorage[nom] == "undefined") {
         localStorage[nom] = val;
     }
 
@@ -259,14 +263,13 @@ function checkDefault() {
     setDefault('rg_plantes', '??');
 }
 function startScript() {
-    if ($("#input").length == 0) {
+    var $input = $("#input");
+    if ($input.length == 0) {
         return;
     }
     console.log('Debut');
 
-    var currentDate = new Date();
-
-    now = $("#input").attr('now');
+    now = $input.attr('now');
     tabActive = false;
     setInterval(function () {
         if (!tabActive) {

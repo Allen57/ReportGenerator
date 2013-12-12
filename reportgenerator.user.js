@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name       ReportGenerator
-// @version    0.4
+// @version    0.5
 // @description  Script qui permet de générer un rapport du vaisseau en cours
 // @match      http://mush.vg/*
 // @copyright  2012+, You
@@ -11,12 +11,15 @@
 var $ = unsafeWindow.jQuery;
 var Main = unsafeWindow.Main;
 var now, cycle, jour, projets, nbProjets, recherches, nbRecherches, oxy, fuel, armure, bouclier, calculInfo = false,
-    nbVivants, vivants, morts, tabActive;
+    nbVivants, vivants, morts, tabActive, change = false;
 
-heros = ['Jin Su', 'Frieda', 'Kuan Ti', 'Janice', 'Roland', 'Hua', 'Paola', 'Chao', 'Finola', 'Stephen', 'Ian', 'Chun', 'Raluca', 'Gioele', 'Eleesha', 'Terrence'];
+//Liste ordonnée des noms des personnages
+var heros = ["Chao", "Chun", "Eleesha", "Finola", "Frieda", "Gioele", "Hua", "Ian", "Janice", "Jin Su", "Kuan Ti", "Paola", "Raluca", "Roland", "Stephen", "Terrence"];
 
+//Valeurs par défaut des différents paramètres utilisées
+var defaultValue = {rg_nom: 'Nom Inconnu', rg_bdd: '??', rg_bases: '??', rg_maj: '??', rg_expeditions: '??', rg_artefacts: '??', rg_cartes: '??', rg_pilgred: '??', rg_plantes: '??'};
 
-function TabTip(e) {
+function RgTabTip(e) {
     var tgt = (e || event).target;
     var title = "ReportGenerator";
     var desc = "Générateur de rapport de vaisseau pour le forum.";
@@ -72,10 +75,12 @@ function buildTab() {
     var tabs = $("<li>").addClass("tab taboff").attr("id", "rg_tab").attr("data-tab", "13").appendTo($tabschat);
     $("<img>").attr("src", "/img/icons/ui/book.png").appendTo(tabs);
     fill_tab();
+
+    $rgtab = $("#rg_tab");
     var $rgtabcontent = $("#rg_tab_content");
     $rgtabcontent.css("display", "none");
     $rgtabcontent.parent().css('height', '500px');
-    $rgtab.on("mouseover", TabTip);
+    $rgtab.on("mouseover", RgTabTip);
     $rgtab.on("mouseout", Main.hideTip);
     $tabschat.find("li").on("click", function () {
         SelectTab(this);
@@ -132,21 +137,23 @@ function calculerInfos() {
         recherches += res[1].stripSlashes();
         nbRecherches++;
     });
-    var $it = Main.heroes.iterator();
-    var aliveHeroes = [];
-    nbVivants = 0;
-    while ($it.hasNext()) {
-        var hero = $it.next();
-        aliveHeroes.push(hero.surname);
-        nbVivants++;
-    }
-    vivants = aliveHeroes.join(", ");
-    morts = heros.diff(aliveHeroes).join(", ");
 }
 function genererRapport() {
     if (!calculInfo) {
         calculerInfos();
     }
+
+    var aliveHeroes = [];
+    nbVivants = 0;
+    heros.forEach(function (hero) {
+        if (localStorage['rg_' + hero + "_etat"] == "vivant") {
+            aliveHeroes.push(hero);
+            nbVivants++;
+        }
+    });
+    vivants = aliveHeroes.join(", ");
+    morts = heros.diff(aliveHeroes).join(", ");
+
     var content = "";
     content += "**" + localStorage['rg_nom'] + "**" + "\n" +
         "**//J" + jour + "-C" + cycle + "//**" + "\n" +
@@ -184,9 +191,11 @@ function fillRapport() {
 function getForm(label, nom) {
     return "<label for='" + nom + "'>" + label + " : </label> <input type='text' name='" + nom + "' id='" + nom + "' value='" + localStorage[nom] + "' style='color: black'/><br>";
 }
+
 function fill_tab() {
     var tab = $("#rg_tab_content").empty();
-    var titre = "<h2>Rapport</h2><br>";
+    var titre = "<div class='objtitle'>ReportGenerator</div><br>";
+    var options = "<div class='replybuttons'><a id='rg_reset' class='butmini'>Réinitialiser</a></div><br>";
     var rapport = "<textarea style='color: black; height: 100px; width: 350px;' id='rg_rapport'></textarea><br>";
     var forms = "<form action='#'>";
     forms += getForm("Nom du vaisseau", "rg_nom");
@@ -198,8 +207,58 @@ function fill_tab() {
     forms += getForm("Morceaux de carte stellaire", "rg_cartes");
     forms += getForm("Pilgred", "rg_pilgred");
     forms += getForm("Plantes", "rg_plantes");
+
+    forms += "<select id='rg_hero' style='color: black'>";
+    heros.forEach(function (hero) {
+        forms += "<option value='" + hero + "'>" + hero + "</option>";
+    });
+    forms += "</select>";
+    forms += "<span id='rg_hero_info'/><br>";
     forms += "</form>";
-    $("<div>").html(titre + rapport + forms).css("text-align", "center").appendTo(tab);
+
+    $("<div>").html(titre + options + rapport + forms).css("text-align", "center").appendTo(tab);
+
+    $("#rg_hero").bind("change",function () {
+        fillHeroInfo(this.value);
+    }).change();
+
+    $("#rg_reset").click(function () {
+        if (confirm("Voulez-vous vraiment réinitialiser l'ensemble des données saisies ?")) {
+            console.log("Reset !");
+            reset();
+        }
+    });
+}
+
+function fillHeroInfo(hero) {
+    var $rgheroinfo = $("#rg_hero_info");
+//    $rgheroinfo.empty();
+    var infos = " - <label>Etat :</label>";
+    infos += "<select id='rg_hero_etat' style='color: black'>>";
+    var options = {vivant: "vivant(e)", mort: "mort(e)"};
+    for (var key in options) {
+        if (options.hasOwnProperty(key)) {
+            var selected = localStorage['rg_' + hero + '_etat'] == key ? 'selected' : '';
+            infos += "<option value='" + key + "' " + selected + ">" + options[key] + "</option>";
+        }
+    }
+    infos += "</select><br><span id='rg_hero_info_etat'/>";
+    $rgheroinfo.html(infos);
+    $("#rg_hero_etat").bind("change",function () {
+        //Pour modifier le rapport en consequence
+        change = true;
+
+        var $rgheroinfoetat = $("#rg_hero_info_etat");
+        switch (this.value) {
+            case "vivant":
+                localStorage['rg_' + hero + "_etat"] = "vivant";
+                $rgheroinfoetat.empty();
+                break;
+            case "mort":
+                localStorage['rg_' + hero + "_etat"] = "mort";
+                $rgheroinfoetat.html("Implémentation des causes de décès à venir ...");
+        }
+    }).change();
 }
 
 function checkChangeNom(nom) {
@@ -212,37 +271,17 @@ function checkChangeNom(nom) {
 }
 
 function checkChange() {
-    var change = false;
-    if (checkChangeNom('rg_nom')) {
-        change = true;
-    }
-    if (checkChangeNom('rg_bdd')) {
-        change = true;
-    }
-    if (checkChangeNom('rg_bases')) {
-        change = true;
-    }
-    if (checkChangeNom('rg_maj')) {
-        change = true;
-    }
-    if (checkChangeNom('rg_expeditions')) {
-        change = true;
-    }
-    if (checkChangeNom('rg_artefacts')) {
-        change = true;
-    }
-    if (checkChangeNom('rg_cartes')) {
-        change = true;
-    }
-    if (checkChangeNom('rg_pilgred')) {
-        change = true;
-    }
-    if (checkChangeNom('rg_plantes')) {
-        change = true;
+    for (var key in defaultValue) {
+        if (defaultValue.hasOwnProperty(key)) {
+            if (checkChangeNom(key)) {
+                change = true;
+            }
+        }
     }
     if (change) {
         checkDefault();
         fillRapport();
+        change = false;
     }
 }
 function setDefault(nom, val) {
@@ -251,17 +290,42 @@ function setDefault(nom, val) {
     }
 
 }
+
 function checkDefault() {
-    setDefault('rg_nom', 'Nom Inconnu');
-    setDefault('rg_bdd', '??');
-    setDefault('rg_bases', '??');
-    setDefault('rg_maj', '??');
-    setDefault('rg_expeditions', '??');
-    setDefault('rg_artefacts', '??');
-    setDefault('rg_cartes', '??');
-    setDefault('rg_pilgred', '??');
-    setDefault('rg_plantes', '??');
+    for (var key in defaultValue) {
+        if (defaultValue.hasOwnProperty(key)) {
+            setDefault(key, defaultValue[key]);
+        }
+    }
+
+    //initialise les attributs pour chaque hero
+    heros.forEach(function (hero) {
+        if (!localStorage['rg_' + hero + "_etat"]) {
+            localStorage['rg_' + hero + "_etat"] = "vivant";
+        }
+    })
 }
+
+function setFormValue(key, value) {
+    $('#' + key).val(value);
+}
+
+function reset() {
+    for (var key in defaultValue) {
+        if (defaultValue.hasOwnProperty(key)) {
+            localStorage[key] = defaultValue[key];
+            setFormValue(key, defaultValue[key]);
+        }
+    }
+
+    //initialise les attributs pour chaque hero
+    heros.forEach(function (hero) {
+        localStorage['rg_' + hero + "_etat"] = "vivant";
+    });
+
+    change = true;
+}
+
 function startScript() {
     var $input = $("#input");
     if ($input.length == 0) {
@@ -270,6 +334,7 @@ function startScript() {
     console.log('Debut');
 
     now = $input.attr('now');
+    checkDefault();
     tabActive = false;
     setInterval(function () {
         if (!tabActive) {

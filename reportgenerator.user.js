@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name       ReportGenerator
-// @version    0.5
+// @version    0.6
 // @description  Script qui permet de générer un rapport du vaisseau en cours
 // @match      http://mush.vg/*
 // @copyright  2012+, You
@@ -18,6 +18,17 @@ var heros = ["Chao", "Chun", "Eleesha", "Finola", "Frieda", "Gioele", "Hua", "Ia
 
 //Valeurs par défaut des différents paramètres utilisées
 var defaultValue = {rg_nom: 'Nom Inconnu', rg_bdd: '??', rg_bases: '??', rg_maj: '??', rg_expeditions: '??', rg_artefacts: '??', rg_cartes: '??', rg_pilgred: '??', rg_plantes: '??'};
+var deathCause = {"Plaque de métal / Décharge électrique": ':mush_eng:',
+    Asphyxie: ':mush_o2:',
+    Faim: ':mush_apple:',
+    "Combat spatial": ':mush_hunter:',
+    "Suicide par manque de moral": ':mush_moral:',
+    "Assassiné": ':mush_pa_shoot:',
+    "Perdu / Mort sur une planète": ':mush_planet_scanned_1:',
+    "Mis en quarantaine": ':mush_pa_core:',
+    "Incendié": ':mush_fire:',
+    "Autres": ':mush_dead:'};
+var heroStatut = {humain: "", mush: "mush", inconnu: ""};
 
 function RgTabTip(e) {
     var tgt = (e || event).target;
@@ -138,33 +149,67 @@ function calculerInfos() {
         nbRecherches++;
     });
 }
+function pluriel(nb) {
+    if (nb > 1) {
+        return "s";
+    }
+    return "";
+}
 function genererRapport() {
     if (!calculInfo) {
         calculerInfos();
     }
 
-    var aliveHeroes = [];
+    var aliveHeroes = [], mushs = [], humains = [], inconnus = [];
     nbVivants = 0;
     heros.forEach(function (hero) {
         if (localStorage['rg_' + hero + "_etat"] == "vivant") {
             aliveHeroes.push(hero);
-            nbVivants++;
+        } else {
+            var mort = localStorage['rg_' + hero + "_death"] + " " + hero;
+            switch(localStorage['rg_' + hero + "_statut"]) {
+                case "mush":
+                    mushs.push(mort);
+                    break;
+                case "humain":
+                    humains.push(mort);
+                    break;
+                case "inconnu":
+                    inconnus.push(mort);
+                    break;
+            }
         }
     });
+    nbVivants = aliveHeroes.length;
     vivants = aliveHeroes.join(", ");
-    morts = heros.diff(aliveHeroes).join(", ");
+    morts = "";
+    var nbMushs = mushs.length;
+    if(nbMushs > 0) {
+        morts += "[aparte]"+nbMushs+" Mush"+pluriel(nbMushs)+" :[/aparte]";
+        morts += mushs.join(", ");
+    }
+    var nbHumains = humains.length;
+    if(nbHumains > 0) {
+        morts += "[aparte]"+nbHumains+" Humain"+pluriel(nbHumains)+" :[/aparte]";
+        morts += humains.join(", ");
+    }
+    var nbInconnus = inconnus.length;
+    if(nbInconnus > 0) {
+        morts += "[aparte]"+nbInconnus+" Inconnu"+pluriel(nbInconnus)+" :[/aparte]";
+        morts += inconnus.join(", ");
+    }
 
     var content = "";
-    content += "**" + localStorage['rg_nom'] + "**" + "\n" +
+    content += "[rp=Rapport de vaisseau]**" + localStorage['rg_nom'] + "**" + "\n" +
         "**//J" + jour + "-C" + cycle + "//**" + "\n" +
         "\n" +
-        ":mush_hp: **" + nbVivants + " Personnes en vie :** " + vivants + "\n" +
-        ":mush_dead: **" + (16 - nbVivants) + " Morts :** " + morts + "\n" +
+        ":mush_hp: **" + nbVivants + " Personne" + pluriel(nbVivants) + " en vie :** " + vivants + "\n" +
+        ":mush_dead: **" + (16 - nbVivants) + " Mort" + pluriel(16 - nbVivants) + " dont :** " + morts + "\n" +
         "\n" +
-        ":mush_pa_comp: **" + nbProjets + " Projets :** " + projets + "\n" +
-        ":mush_pills: **" + nbRecherches + " Recherches :** " + recherches + "\n" +
+        ":mush_pa_comp: **" + nbProjets + " Projet" + pluriel(nbProjets) + " :** " + projets + "\n" +
+        ":mush_pills: **" + nbRecherches + " Recherche" + pluriel(nbRecherches) + " :** " + recherches + "\n" +
         "\n" +
-        "**//:mush_talky: Communications ://**" + "\n" +
+        "**//:mush_talky: Communications : //**" + "\n" +
         "\n" +
         "**Xyloph BDD :** " + localStorage['rg_bdd'] + "\n" +
         "**Bases rebelles :** " + localStorage['rg_bases'] + "\n" +
@@ -181,7 +226,7 @@ function genererRapport() {
         "\n" +
         ":mush_pa_pilgred: **Pilgred :** " + localStorage['rg_pilgred'] + "\n" +
         "\n" +
-        ":mush_pa_garden: **Plantes :** " + localStorage['rg_plantes'];
+        ":mush_pa_garden: **Plantes :** " + localStorage['rg_plantes'] + "[/rp]";
     return content;
 }
 function fillRapport() {
@@ -230,10 +275,43 @@ function fill_tab() {
     });
 }
 
+function fillHeroDeath(hero) {
+    var $rgheroinfoetat = $("#rg_hero_info_etat");
+    var forms = "<label>Cause : </label>";
+    forms += "<select id='rg_hero_death' style='color: black'>";
+    for (var key in deathCause) {
+        if (deathCause.hasOwnProperty(key)) {
+            var selected = localStorage['rg_' + hero + '_death'] == deathCause[key] ? 'selected' : '';
+            forms += "<option value='" + key + "' " + selected + ">" + key + "</option>";
+        }
+    }
+    forms += "</select><br/>";
+    forms += "<label>Statut : </label>";
+    forms += "<select id='rg_hero_statut' style='color: black'>";
+    for (var key in heroStatut) {
+        if (heroStatut.hasOwnProperty(key)) {
+            var selected = localStorage['rg_' + hero + '_statut'] == key ? 'selected' : '';
+            forms += "<option value='" + key + "' " + selected + ">" + key + "</option>";
+        }
+    }
+    forms += "</select>";
+    $rgheroinfoetat.html(forms);
+    $("#rg_hero_death").bind("change",function () {
+        console.log(this.value);
+        localStorage['rg_' + hero + "_death"] = deathCause[this.value];
+        change = true;
+    }).change();
+    $("#rg_hero_statut").bind("change",function () {
+        console.log(this.value);
+        localStorage['rg_' + hero + "_statut"] = this.value;
+        change = true;
+    }).change();
+}
+
 function fillHeroInfo(hero) {
     var $rgheroinfo = $("#rg_hero_info");
 //    $rgheroinfo.empty();
-    var infos = " - <label>Etat :</label>";
+    var infos = " - <label>Etat : </label>";
     infos += "<select id='rg_hero_etat' style='color: black'>>";
     var options = {vivant: "vivant(e)", mort: "mort(e)"};
     for (var key in options) {
@@ -245,8 +323,6 @@ function fillHeroInfo(hero) {
     infos += "</select><br><span id='rg_hero_info_etat'/>";
     $rgheroinfo.html(infos);
     $("#rg_hero_etat").bind("change",function () {
-        //Pour modifier le rapport en consequence
-        change = true;
 
         var $rgheroinfoetat = $("#rg_hero_info_etat");
         switch (this.value) {
@@ -256,7 +332,7 @@ function fillHeroInfo(hero) {
                 break;
             case "mort":
                 localStorage['rg_' + hero + "_etat"] = "mort";
-                $rgheroinfoetat.html("Implémentation des causes de décès à venir ...");
+                fillHeroDeath(hero);
         }
     }).change();
 }
